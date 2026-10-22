@@ -48,7 +48,7 @@ public class AuthController {
 
         Instant now = Instant.now();
         JwtClaimsSet claims = JwtClaimsSet.builder()
-                .subject(user.getEmail())
+                .subject(user.getId())
                 .issuedAt(now)
                 .expiresAt(now.plus(1, ChronoUnit.HOURS))
                 .claim("roles", List.of(user.getRole()))
