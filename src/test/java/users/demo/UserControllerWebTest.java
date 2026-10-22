@@ -35,28 +35,59 @@ class UserControllerWebTest {
     private JwtDecoder jwtDecoder;
 
     @Test
-    void getUsers_returns200() throws Exception {
+    void getUsers_asUser_returns403() throws Exception {
         when(userRepository.findAll()).thenReturn(List.of(new User("User1", "User1@test.com")));
 
-        mockMvc.perform(get("/users").with(jwt()))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].nom").value("User1"));
+        mockMvc.perform(get("/users")
+                        .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
-    void getUser_withToken_returns200() throws Exception {
-        when(userRepository.findById("1"))
-                .thenReturn(Optional.of(new User("User1", "User1@test.com")));
+    void getUsers_asAdmin_returns200() throws Exception {
+        when(userRepository.findAll()).thenReturn(List.of(new User("User1", "User1@test.com")));
 
-        mockMvc.perform(get("/users/1").with(jwt()))
+        mockMvc.perform(get("/users")
+                    .with(jwt().authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.email").value("User1@test.com"));
+                .andExpect(jsonPath("$[0].nom").value("User1"));
     }
 
     @Test
     void getUsers_withoutToken_returns401() throws Exception {
         mockMvc.perform(get("/users"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getUser_asOwner_returns200() throws Exception {
+        when(userRepository.findById("1"))
+                .thenReturn(Optional.of(new User("User1", "User1@test.com")));
+
+        mockMvc.perform(get("/users/1")
+                        .with(jwt().jwt(j -> j.subject("1"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("User1@test.com"));
+    }
+
+    @Test
+    void getUser_asOtherUser_returns403() throws Exception {
+        mockMvc.perform(get("/users/1")
+                        .with(jwt().jwt(j -> j.subject("2"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getUser_asAdmin_returns200() throws Exception {
+        when(userRepository.findById("1"))
+                .thenReturn(Optional.of(new User("User1", "User1@test.com")));
+
+        mockMvc.perform(get("/users/1")
+                        .with(jwt().jwt(j -> j.subject("99"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isOk());
     }
 
     @Test

@@ -18,7 +18,7 @@ public class User {
 
     private String email;
 
-    private String role = "USER"
+    private String role = "USER";
 
     public User(String nom, String email) {
         this.nom = nom;
