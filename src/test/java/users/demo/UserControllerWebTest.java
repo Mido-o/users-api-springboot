@@ -4,17 +4,19 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.*;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -33,6 +35,9 @@ class UserControllerWebTest {
 
     @MockitoBean
     private JwtDecoder jwtDecoder;
+
+    @MockitoBean
+    private RoleService roleService;
 
     @Test
     void getUsers_asUser_returns403() throws Exception {
@@ -142,20 +147,23 @@ class UserControllerWebTest {
 
     @Test
     void setRole_selfDemotion_returns409() throws Exception {
+        when(roleService.changeRole("1", "USER", "1"))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Admins cannot demote themselves"));
+
         mockMvc.perform(put("/users/1/role")
                         .with(jwt().jwt(j -> j.subject("1"))
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"USER\"}"))
                 .andExpect(status().isConflict());
+
+        verify(roleService).changeRole("1", "USER", "1");
     }
 
     @Test
     void setRole_lastAdmin_returns409() throws Exception {
-        User admin = new User("A", "a@test.com");
-        admin.setRole("ADMIN");
-        when(userRepository.findById("2")).thenReturn(Optional.of(admin));
-        when(userRepository.countByRole("ADMIN")).thenReturn(1L);
+        when(roleService.changeRole("2", "USER", "1"))
+                .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "Cannot remove the last admin"));
 
         mockMvc.perform(put("/users/2/role")
                         .with(jwt().jwt(j -> j.subject("1"))
@@ -163,5 +171,19 @@ class UserControllerWebTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"role\":\"USER\"}"))
                 .andExpect(status().isConflict());
+
+        verify(roleService).changeRole("2", "USER", "1");
+    }
+
+    @Test
+    void setRole_asUser_returns403() throws Exception {
+        mockMvc.perform(put("/users/2/role")
+                        .with(jwt().jwt(j -> j.subject("1"))
+                                .authorities(new SimpleGrantedAuthority("ROLE_USER")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"ADMIN\"}"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(roleService);
     }
 }

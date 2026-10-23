@@ -19,6 +19,9 @@ public class UserController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private RoleService roleService;
+
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     public List<User> getUsers() {
@@ -51,33 +54,12 @@ public class UserController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
     public void deleteUser(@PathVariable String id) {
-        userRepository.findById(id).ifPresent(user -> {
-            if ("ADMIN".equals(user.getRole()) && userRepository.countByRole("ADMIN") <= 1) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot delete the last admin");
-            }
-        });
-
-        userRepository.deleteById(id);
+        roleService.deleteUser(id);
     }
 
     @PutMapping("/{id}/role")
     @PreAuthorize("hasRole('ADMIN')")
     public User setRole(@PathVariable String id, @RequestBody RoleRequest req, Authentication authentication) {
-        if (!Set.of("USER", "ADMIN").contains(req.role())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Role must be USER or ADMIN");
-
-        if (id.equals(authentication.getName()) && !"ADMIN".equals(req.role())) throw new ResponseStatusException(HttpStatus.CONFLICT, "Admins cannot demote themselves");
-
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-
-        if (!"ADMIN".equals(req.role())
-                && "ADMIN".equals(user.getRole())
-                && userRepository.countByRole("ADMIN") <= 1) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot remove the last admin");
-        }
-
-        user.setRole(req.role());
-
-        return userRepository.save(user);
+        return roleService.changeRole(id, req.role(), authentication.getName());
     }
 }
